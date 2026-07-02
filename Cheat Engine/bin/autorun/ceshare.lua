@@ -1,3 +1,4 @@
+do return end -- telemetry disabled in this SirCabby fork (no online sharing phone-home). See CLAUDE.md.
 if getTranslationFolder()~='' then
   loadPOFile(getTranslationFolder()..'CeShare.po')
 end

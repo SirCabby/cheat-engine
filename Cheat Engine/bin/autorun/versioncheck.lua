@@ -1,3 +1,4 @@
+do return end -- telemetry disabled in this SirCabby fork (no update phone-home). See CLAUDE.md.
 --version check update script for cheat engine
 --Don't like it? Just delete this file. Easy as that
 

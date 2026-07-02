@@ -91,7 +91,8 @@
 -dNESTEDSTRUCTURES
 -dTHREADNAMESUPPORT
 -donebytejumps
--dNoODS"/>
+-dNoODS
+-dlaztrunk"/>
             <OtherDefines Count="20">
               <Define0 Value="NOTMULTITHREADED"/>
               <Define1 Value="benchmarkps"/>
