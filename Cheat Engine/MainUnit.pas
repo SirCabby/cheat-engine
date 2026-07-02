@@ -8559,21 +8559,22 @@ begin
 
   dontrunshow := True;
   decodedate(now, year, month, day);
-  if (month = 7) and (day = 1) then
-    ShowMessage(strhappybirthday);
-  if (month = 1) and (day = 1) then
-  begin
-    if reg.ValueExists('ShownHappyNewYear'+inttostr(year))=false then
-    begin
-      ShowMessage(strnewyear);
-      reg.WriteBool('ShownHappyNewYear'+inttostr(year), true);
-    end;
-  end;
-  if (month = 1) and (day = 1) and (year >= 2030) then
-    ShowMessage(strFuture);
+  // --- Celebration nag popups / pranks removed (local build) ---
+  //if (month = 7) and (day = 1) then
+  //  ShowMessage(strhappybirthday);
+  //if (month = 1) and (day = 1) then
+  //begin
+  //  if reg.ValueExists('ShownHappyNewYear'+inttostr(year))=false then
+  //  begin
+  //    ShowMessage(strnewyear);
+  //    reg.WriteBool('ShownHappyNewYear'+inttostr(year), true);
+  //  end;
+  //end;
+  //if (month = 1) and (day = 1) and (year >= 2030) then
+  //  ShowMessage(strFuture);
 
-  if (month = 4) and (day = 1) then
-    aprilfools := True;
+  //if (month = 4) and (day = 1) then
+  //  aprilfools := True;
 
 
   //aprilfools:=true;
