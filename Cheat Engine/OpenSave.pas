@@ -398,8 +398,10 @@ begin
       begin
         try
           version:=strtoint(tempnode.TextContent);
-          if (version>CurrentTableVersion) then
-            showmessage(rsOSThereIsANewerVersionifCheatEngineOutEtc);
+          //SirCabby fork: suppressed the "newer version of Cheat Engine out" nag that fires when
+          //loading a .CT saved by a newer CE (e.g. 7.7 tables, version>45). Harmless for our use.
+          //if (version>CurrentTableVersion) then
+          //  showmessage(rsOSThereIsANewerVersionifCheatEngineOutEtc);
 
           lastLoadedTableVersion:=version;
         except

@@ -37,9 +37,13 @@ The prebuilt CE 7.4 "Lite" **and** the old CE 6.3 have been **removed**. The mac
     - `autorun/*.lua` — Lua-scripted features loaded at startup, **editable without recompiling**:
       `monoscript.lua` (Mono dissector + `LaunchMonoDataCollector`), `dotnetinfo.lua`/`DotNet*` (.NET),
       `versioncheck.lua` (update nag, phones home), `ceshare*` (online sharing, phones home).
-    - `autorun/dlls/MonoDataCollector{32,64}.dll` and other **committed prebuilt DLLs** (speedhack,
-      lua53, d3dhook, luaclient…) — so you usually only need to build the **exe**, not the C projects.
-  - `MonoDataCollector/` — C++ source for the injected Mono DLL (rebuild only if changing Mono internals).
+    - `autorun/dlls/`: `CEJVMTI.dll` (Java) is committed; the injected **`MonoDataCollector{32,64}.dll`
+      are NOT** (upstream dropped them from git in 2021, and `bin/` is gitignored here) — **you must build
+      them once** (see "Build the Mono collector DLL"). Other prebuilt DLLs (`lua53`, `d3dhook`,
+      `luaclient`, speedhack…) sit in `bin/` and are reused as-is, so beyond the Mono DLL you build only the **exe**.
+  - `MonoDataCollector/` — C++ source for the injected Mono DLL. **You MUST build this** (the prebuilt DLL
+    isn't committed); without it every Mono script fails with "DLL Injection failed or invalid DLL version".
+    Build script: `MonoDataCollector/build-mingw-dll.sh` — see "Build the Mono collector DLL".
 - `DBKKernel/` — Windows kernel driver (C). **Do NOT build for Wine** (no driver loads under Wine;
   CE falls back to user-mode `ReadProcessMemory`/VEH).
 - `dbvm/`, `DBVM UEFI/` — Dark Byte's hypervisor (advanced; irrelevant under Wine).
@@ -67,8 +71,32 @@ fresh:
 
 Alternative (matches README exactly, slower): install **Lazarus 2.2.2 win64** into a Wine prefix
 (`lazarus-2.2.2-fpc-3.2.2-win64.exe` then the `cross-i386-win32-win64` add-on) and run
-`wine lazbuild.exe "cheatengine.lpi"` — avoids the 4.8 source patches. Secondary projects (speedhack.lpr,
-luaclient.lpr, monodatacollector.sln, tcclib.sln, …) only if you modify them — see upstream `README.md`.
+`wine lazbuild.exe "cheatengine.lpi"` — avoids the 4.8 source patches. Other secondary projects
+(speedhack.lpr, luaclient.lpr, tcclib.sln, …) only if you modify them — see upstream `README.md`.
+(The Mono collector DLL is the exception — you always need it; build it via the subsection below, **not**
+its `.sln`.)
+
+### Build the Mono collector DLL  (REQUIRED for Mono/Unity games like *Blasphemous*)  (VERIFIED 2026-07-02)
+CE's Mono features inject `bin/autorun/dlls/MonoDataCollector{32,64}.dll` into the target game. Upstream
+**stopped committing** these prebuilt DLLs in 2021 (commit `09654220`) — they ship only inside the compiled
+installer — and `bin/` is gitignored here, so a from-source build has **no collector DLL** and every Mono
+script fails with **"DLL Injection failed or invalid DLL version"** (`bin/autorun/monoscript.lua:557`).
+Build them from the in-tree C++ source (which is `MONO_DATACOLLECTORVERSION=20240511`, matching `monoscript.lua`):
+1. `sudo pacman -S --needed mingw-w64-gcc`  *(one-time; provides `x86_64-w64-mingw32-g++`. Claude can't sudo.)*
+2. `bash "Cheat Engine/MonoDataCollector/build-mingw-dll.sh"`  → writes both DLLs into `bin/autorun/dlls/`.
+   No CE-exe rebuild needed (the collector is a runtime file): restart CE and the Mono script works. Only the
+   **64-bit** DLL is needed for 64-bit games (Blasphemous is 64-bit); the script also builds 32-bit if the
+   `i686-w64-mingw32-g++` cross-compiler is installed.
+
+**Fresh-clone rebuild — yes.** Everything needed is in git *except the toolchain*: `build-mingw-dll.sh` lives
+in the tracked `MonoDataCollector/` dir (NOT gitignored `bin/`), and its inputs (`MonoDataCollector/`,
+`Common/Pipe.cpp`) are all tracked; only the regenerated `bin/` output is ignored. So on a clean clone:
+install `mingw-w64-gcc` once, run the script. (Keep the script committed for this to hold.) The script bridges
+the MSVC→mingw gaps **without editing upstream source** (so `git rebase upstream/master` stays clean):
+case-alias shim headers (`Windows.h`/`TlHelp32.h`/`StdAfx.h`), `-D_WINDOWS`, force-included `<cstdint>`,
+blanked `__in`/`__in_bcount` SAL macros, a generated `.def` exporting `MDC_ServerPipe` as **DATA** (GNU ld
+needs the keyword — CE reads/writes the pipe handle at that address), and `-static-lib*` so the injected DLL
+carries no libgcc/libstdc++/winpthread dependency.
 
 ## Nag / annoyance map (for removal)
 - **Celebration popups** — `MainUnit.pas` ~8560: birthday (`if month=7 and day=1 then
@@ -96,8 +124,26 @@ luaclient.lpr, monodatacollector.sln, tcclib.sln, …) only if you modify them �
   `.po` translations): `bin/autorun/versioncheck.lua` and `bin/autorun/ceshare.lua` each start with a
   `do return end` guard, so they load as no-ops (no update/online-sharing phone-home). The `ceshare/`
   subdir is never loaded once `ceshare.lua` early-returns. Minimal one-line diffs = easy upstream rebase.
+- **"Newer version of CE out" table nag** — `Cheat Engine/OpenSave.pas` ~401: commented out the
+  `if (version>CurrentTableVersion) then showmessage(rsOSThereIsANewerVersion…)`. This popup fires when
+  loading a `.CT` whose `CheatEngineTableVersion` (>45 for e.g. 7.7 tables) exceeds our 7.5.1 build's
+  `_CurrentTableVersion=45`. This is the popup that looks like an update nag "on launch" (it's really
+  on table-load). NOTE: this is the compiled exe, so **it only takes effect after `cheatengine-rebuild`**.
+- **Mono collector DLL build (added 2026-07-02)** — Mono scripts on Blasphemous failed with "DLL Injection
+  failed or invalid DLL version" because the injected `MonoDataCollector64.dll` doesn't exist in a
+  from-source build (upstream dropped the prebuilt Mono DLLs in 2021; `bin/` is gitignored). Added
+  `Cheat Engine/MonoDataCollector/build-mingw-dll.sh` to cross-compile it from the in-tree C++ source with
+  mingw-w64. Built & verified: PE32+ x86-64, `MDC_ServerPipe` DATA export, version 20240511, no runtime
+  deps. Full recipe in "Build the Mono collector DLL". (New file, not a source edit → no upstream-rebase risk.)
+
+### Build gotcha: non-deterministic FPC internal errors (ICE)
+FPC sometimes aborts with `Internal error <n>` / `(1026) Compilation raised exception internally` at a
+*random* unit (seen at `foundlisthelper.pas`, `SynHighlighterAA.pas`) — not a source bug. A failed
+compile can leave stale units in `lib/`, so the next incremental build then fails elsewhere. Fix: wipe
+`Cheat Engine/lib/` and build clean. **`cheatengine-rebuild` now auto-does this on any build failure.**
 
 ## Conventions / gotchas
-- Lua is **5.3**. Build target is **win64**; build only the app and reuse the committed DLLs.
+- Lua is **5.3**. Build target is **win64**; build the app and reuse the committed DLLs — **except the Mono
+  collector DLLs**, which aren't committed and must be built once (see "Build the Mono collector DLL").
 - Never build `DBKKernel/` or `dbvm/` for a Wine setup.
 - Sync upstream later with: `git fetch upstream && git rebase upstream/master`.
