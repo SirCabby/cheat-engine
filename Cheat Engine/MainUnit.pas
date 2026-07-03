@@ -490,6 +490,7 @@ type
     N5: TMenuItem;
     Panel4: TPanel;
     advancedbutton: TSpeedButton;
+    btnToggleScanControls: TSpeedButton;
     CommentButton: TSpeedButton;
     Panel5: TPanel;
     ProcessLabel: TLabel;
@@ -718,6 +719,10 @@ type
     procedure Setbreakpoint1Click(Sender: TObject);
     procedure TopDisablerTimer(Sender: TObject);
     procedure advancedbuttonClick(Sender: TObject);
+    procedure btnToggleScanControlsClick(Sender: TObject);
+    procedure setScanControlsCollapsed(collapse: boolean);
+    procedure updateCollapseButtonCaption;
+    function isTopBarControl(c: TControl): boolean;
     procedure cbHexadecimalClick(Sender: TObject);
     procedure SetHotkey1Click(Sender: TObject);
     procedure UndoScanClick(Sender: TObject);
@@ -793,6 +798,13 @@ type
     groupconfigbutton: TButton;
 
     oldwidth, oldheight: integer;
+
+    scancontrolscollapsed: boolean; //when true, only the compact top toolbar of Panel5 shows; find controls hidden
+    savedFullPanel5Height: integer; //Panel5.Height remembered while collapsed, restored on expand
+    savedPanel5MinHeight: integer;  //Panel5.Constraints.MinHeight remembered while collapsed
+    savedCollapseDelta: integer;    //amount the window was shrunk when collapsing (to undo on expand)
+    fHiddenScanControls: TList;     //Panel5 find controls hidden by collapse, restored on expand
+
     newaddress: ptrUint;
     isbit: boolean;
     tempbitmap: Tbitmap;
@@ -8311,6 +8323,110 @@ begin
   advancedoptions.Show;
 end;
 
+procedure TMainForm.updateCollapseButtonCaption;
+begin
+  if scancontrolscollapsed then
+  begin
+    btnToggleScanControls.Caption:='Show Scan Controls';
+    btnToggleScanControls.Hint:='Show the scan / search controls';
+  end
+  else
+  begin
+    btnToggleScanControls.Caption:='Hide Scan Controls';
+    btnToggleScanControls.Hint:='Hide the scan / search controls and show only the cheat list';
+  end;
+end;
+
+function TMainForm.isTopBarControl(c: TControl): boolean;
+//The compact top toolbar strip of Panel5 that stays visible when collapsed:
+//attach-to-process (Panel7 -> sbOpenProcess), open (LoadButton), save (SaveButton),
+//the process name (ProcessLabel), the ProgressBar, and LogoPanel (now holds SettingsButton).
+begin
+  result:=(c=Panel7) or (c=LoadButton) or (c=SaveButton) or
+          (c=ProcessLabel) or (c=ProgressBar) or (c=LogoPanel);
+end;
+
+procedure TMainForm.setScanControlsCollapsed(collapse: boolean);
+//Collapse hides just the address-finding controls in Panel5 (scan value/type, First/Next/
+//Undo Scan, Memory Scan Options, the found list, ...) and shrinks Panel5 down to the top
+//toolbar strip, then shrinks the window by the reclaimed height. The strip (process/open/
+//save buttons, process name, progress bar, Settings) and the cheat list below stay put.
+var
+  i, stripHeight: integer;
+  c: TControl;
+begin
+  if collapse=scancontrolscollapsed then
+  begin
+    updateCollapseButtonCaption;
+    exit;
+  end;
+
+  if fHiddenScanControls=nil then
+    fHiddenScanControls:=TList.Create;
+
+  DisableAutoSizing;
+  try
+    scancontrolscollapsed:=collapse; //set early so the BoundsUpdate min-height guard is active
+
+    if collapse then
+    begin
+      savedFullPanel5Height:=Panel5.Height;
+      savedPanel5MinHeight:=Panel5.Constraints.MinHeight;
+      Panel5.Constraints.MinHeight:=0; //let Panel5 shrink below the scan-area minimum
+
+      //hide every Panel5 child that isn't part of the top toolbar strip
+      fHiddenScanControls.Clear;
+      for i:=0 to Panel5.ControlCount-1 do
+      begin
+        c:=Panel5.Controls[i];
+        if (not isTopBarControl(c)) and c.Visible then
+        begin
+          c.Visible:=false;
+          fHiddenScanControls.Add(c);
+        end;
+      end;
+
+      //measure the strip from the toolbar controls that remain visible
+      stripHeight:=0;
+      for i:=0 to Panel5.ControlCount-1 do
+      begin
+        c:=Panel5.Controls[i];
+        if isTopBarControl(c) and c.Visible then
+          stripHeight:=max(stripHeight, c.Top+c.Height);
+      end;
+      inc(stripHeight,4);
+
+      savedCollapseDelta:=(savedFullPanel5Height-stripHeight)+Splitter1.Height;
+      Splitter1.Visible:=false;
+      Panel5.Height:=stripHeight;
+      ClientHeight:=ClientHeight-savedCollapseDelta;
+    end
+    else
+    begin
+      //restore exactly the controls we hid (leaves already-hidden helpers hidden)
+      for i:=0 to fHiddenScanControls.Count-1 do
+        TControl(fHiddenScanControls[i]).Visible:=true;
+      fHiddenScanControls.Clear;
+
+      Splitter1.Visible:=true;
+      Panel5.Constraints.MinHeight:=savedPanel5MinHeight;
+      Panel5.Height:=savedFullPanel5Height;
+      ClientHeight:=ClientHeight+savedCollapseDelta;
+      spawnBoundsUpdater; //recompute Panel5's min height for the restored layout
+    end;
+
+    updateCollapseButtonCaption;
+  finally
+    EnableAutoSizing;
+  end;
+end;
+
+procedure TMainForm.btnToggleScanControlsClick(Sender: TObject);
+begin
+  setScanControlsCollapsed(not scancontrolscollapsed);
+  cereg.writeBool('Collapse Scan Controls', scancontrolscollapsed);
+end;
+
 procedure TMainForm.cbHexadecimalClick(Sender: TObject);
 var
   x: qword;
@@ -8981,6 +9097,11 @@ begin
     caption:=caption+' (Admin)';
 
   askAboutRunningAsAdmin:=true;
+
+  //restore the collapsed-scan-controls state last, after all Panel5 sizing above has run
+  updateCollapseButtonCaption;
+  if cereg.readBool('Collapse Scan Controls', false) then
+    setScanControlsCollapsed(true);
 
 end;
 
@@ -10832,6 +10953,7 @@ var
   reg: tregistry;
 begin
 
+  fHiddenScanControls.Free;
 
   if flashprocessbutton<>nil then
   begin
@@ -11365,6 +11487,12 @@ end;
 procedure TMainForm.BoundsUpdate(sender: TObject);
 var newminheight: integer;
 begin
+  if scancontrolscollapsed then
+  begin
+    boundsupdater.enabled:=false;
+    exit; //keep Panel5's min height at 0 while collapsed so the strip can stay short
+  end;
+
   newminheight:=gbScanOptions.top + gbScanOptions.Height + max(speedbutton2.Height, btnAddAddressManually.height ) + 10;
 
   if newminheight<>panel5.Constraints.MinHeight then

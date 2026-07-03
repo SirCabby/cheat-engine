@@ -184,6 +184,38 @@ carries no libgcc/libstdc++/winpthread dependency.
     (`incColor(TextBackground,10)`) + a `ButtonBorderColor` divider, draw the caption with `colorset.FontColor` via
     `DrawText`, return `CDRF_SKIPDEFAULT` so it wins regardless of the (missing) theme. One edit, covers all
     `TListView` headers app-wide.
+- **Collapse scan controls (added 2026-07-03)** — added a **"Hide Scan Controls" / "Show Scan Controls"**
+  toggle (flat `TSpeedButton btnToggleScanControls`) on the bottom bar `Panel4`, between "Advanced Options"
+  and "Table Extras". It does a **partial** collapse of `Panel5` (the top area): it keeps a compact top toolbar
+  strip — **attach-to-process** (`Panel7`→`sbOpenProcess`), **open** (`LoadButton`), **save** (`SaveButton`),
+  the **process name** (`ProcessLabel`), the **`ProgressBar`**, and **`LogoPanel`** (which now holds Settings,
+  see below) — and hides only the address-finding controls (scan value/type, First/Next/Undo Scan, Memory Scan
+  Options, the found list, `SpeedButton2/3`, "Found:" count, etc.), then shrinks `Panel5` down to the strip
+  height and shrinks the window by the reclaimed height. So collapsed = menu bar + toolbar strip + cheat list
+  (`Panel1`, alClient) + bottom bar. Implementation (`setScanControlsCollapsed` in `MainUnit.pas`): hides the
+  find controls by iterating `Panel5.Controls` and hiding any that aren't in the keep-set
+  (`isTopBarControl`) — robust against upstream adding new scan widgets — remembering exactly which it hid in
+  `fHiddenScanControls: TList` so expand restores only those (leaves already-hidden helpers like `btnFirst`/
+  `btnNext` hidden). To let `Panel5` shrink below its normal minimum it saves+zeroes `Panel5.Constraints.MinHeight`
+  and **guards `BoundsUpdate`** (the 500 ms `boundsupdater` timer that re-clamps that MinHeight to the scan
+  area) with `if scancontrolscollapsed then exit`. Window shrink is an explicit `ClientHeight -= delta`
+  bracketed in `DisableAutoSizing/EnableAutoSizing` (form `AutoSize=True` is inert for runtime height — FormShow
+  already sets `ClientHeight` directly). State persists via `cereg` REG_DWORD **`Collapse Scan Controls`**,
+  re-applied at the very end of `FormShow`.
+  - **Top-right reshuffle (same change)** — to make room for the strip's Settings button, the **CE logo was
+    removed** and the **Settings button moved up to the top-right** next to the progress bar: `MainUnit.lfm`
+    sets `Logo.Visible=False` (kept as a field — `LogoClick`/`LogoMouseDown` still bind; only ref in `.pas` is
+    the field decl, logo is static/no animation) and re-anchors `SettingsButton` from `Logo`.bottom to
+    `LogoPanel`.top. `LogoPanel` (AutoSize, top-right, anchored akTop+akRight) then shrinks to just the Settings
+    button; `ProgressBar` (right-anchored to `LogoPanel`) automatically extends up to it.
+  - Edits: `MainUnit.lfm` (`btnToggleScanControls` in `Panel4`; `Logo.Visible=False`; `SettingsButton` re-anchor)
+    + `MainUnit.pas` (published field, `btnToggleScanControlsClick`/`setScanControlsCollapsed`/
+    `updateCollapseButtonCaption`/`isTopBarControl`, 4 state fields incl. `fHiddenScanControls`, the
+    `BoundsUpdate` guard, `FormDestroy` free, and the startup-restore in `FormShow`). Built & **verified**
+    2026-07-03 (screenshots): expanded shows the full scan panel with the logo gone + Settings top-right;
+    forcing the persisted flag on launches collapsed with the strip (process/open/save + progress bar + Settings)
+    over the cheat list and the button reading "Show Scan Controls". **Compiled into the exe → only live after
+    `cheatengine-rebuild`.** Localized (no vendored-unit edits), low upstream-rebase risk.
 
 ### Build gotcha: non-deterministic FPC internal errors (ICE)
 FPC sometimes aborts with `Internal error <n>` / `(1026) Compilation raised exception internally` at a
