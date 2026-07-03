@@ -199,15 +199,30 @@ begin
   newscale := newPercent / 100;
   if newscale < 1.0 then newscale := 1.0;
   if newscale > 4.0 then newscale := 4.0;
-  if newscale = uitextscale then exit;
 
   // Make sure the hooks exist even if we started at 100% (so future forms scale too).
   if uiscaler = nil then
     InitUITextScale;
 
-  // Rescale every form we have already scaled, from the current scale to the new one.
+  if newscale = uitextscale then exit;
+
+  // 1. Rescale every form we have already scaled, from the current global scale to the new one.
   for i := 0 to uiscaler.scaledForms.Count - 1 do
     scaleFormBetween(TCustomForm(uiscaler.scaledForms[i]), uitextscale, newscale);
+
+  // 2. Scale any currently-VISIBLE form we have not scaled yet - i.e. windows that were opened
+  //    while the scale was still 100%, so onFormVisibleChanged skipped them. This is what makes a
+  //    live scale change actually resize the windows already on screen (the Settings window you are
+  //    editing, the main window, an open memory viewer...) instead of only future ones. Hidden
+  //    untracked forms are left alone; they get scaled from 1.0 by the show hook when next opened.
+  for i := 0 to Screen.CustomFormCount - 1 do
+  begin
+    f := Screen.CustomForms[i];
+    if (f = nil) or (not f.Visible) or (f is TsynCompletionForm) then continue;
+    if uiscaler.scaledForms.IndexOf(f) >= 0 then continue; // already handled in step 1
+    uiscaler.scaledForms.Add(f);
+    scaleFormBetween(f, 1.0, newscale);
+  end;
 
   uitextscale := newscale;
 
