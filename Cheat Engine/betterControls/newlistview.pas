@@ -147,7 +147,12 @@ begin
         CloseThemeData(theme);
       end
       else
-        fDefaultTextColor:=font.color;
+      begin
+        //Wine has no ItemsView theme, so OpenThemeData failed -> fall back to our
+        //explicit dark palette instead of leaving the background at 0 (pure black).
+        fDefaultTextColor:=colorset.FontColor;
+        fDefaultBackgroundColor:=colorset.TextBackground;
+      end;
 
       Font.color:=fDefaultTextColor;
       Color:=fDefaultBackgroundColor;

@@ -39,7 +39,7 @@ begin
 
     if r.left>clientwidth-1 then r.left:=clientwidth-1;   //for the last border
 
-    canvas.brush.color:=colorset.TextBackground;
+    canvas.brush.color:=incColor(colorset.TextBackground,10);
     canvas.pen.color:=colorset.ButtonBorderColor;
     canvas.FillRect(r);
     canvas.Rectangle(r);
@@ -68,8 +68,8 @@ begin
     arect.Right:=section.Right;
 
     case section.State of
-      hsNormal: canvas.brush.color:=colorset.TextBackground;
-      hsHot: canvas.brush.color:=incColor(colorset.TextBackground,16);
+      hsNormal: canvas.brush.color:=incColor(colorset.TextBackground,10);
+      hsHot: canvas.brush.color:=incColor(colorset.TextBackground,22);
       hsPressed: canvas.brush.color:=incColor(colorset.TextBackground,32);
     end;
 
@@ -77,6 +77,7 @@ begin
     canvas.FillRect(arect);
     canvas.Rectangle(arect);
 
+    canvas.Font.Color:=colorset.FontColor;   //ensure readable light header text (canvas font may default dark)
     ts:=canvas.TextStyle;
     ts.Alignment:=section.Alignment;
     ts.Layout:=tlCenter;

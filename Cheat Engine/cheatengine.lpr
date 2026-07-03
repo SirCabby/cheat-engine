@@ -18,7 +18,7 @@ uses
   macport, macportdefines,coresymbolication, macexceptiondebuggerinterface,
   macCreateRemoteThread, macumm, machotkeys, macPipe,
   {$endif}
-  betterControls, controls, sysutils, Classes, Forms, LazUTF8, dialogs, SynCompletion,
+  betterControls, cedarkmode, controls, sysutils, Classes, Forms, LazUTF8, dialogs, SynCompletion,
   MainUnit, CEDebugger, NewKernelHandler, CEFuncProc, ProcessHandlerUnit,
   symbolhandler, Assemblerunit, hypermode, byteinterpreter, addressparser,
   autoassembler, ProcessWindowUnit, MainUnit2, Filehandler,

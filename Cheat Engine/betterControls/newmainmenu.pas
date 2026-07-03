@@ -186,6 +186,7 @@ var
   scText: string;
   ts: TTextStyle;
   r2: TRect;
+  i, lv: integer;
 begin
   Result:=True;
   dark:=ShouldAppsUseDarkMode();
@@ -212,6 +213,22 @@ begin
   ACanvas.Brush.Color:=bg;
   ACanvas.Brush.Style:=bsSolid;
   ACanvas.FillRect(ARect);
+
+  //When UI-scaled, the last visible top-level bar item must also paint the empty bar
+  //area to its right, else it stays the system (light) menu-bar color (the white gap).
+  if isBar and dark and (Parent<>nil) then
+  begin
+    lv:=-1;
+    for i:=Parent.Count-1 downto 0 do
+      if Parent.Items[i].Visible then begin lv:=i; break; end;
+    if MenuIndex=lv then
+    begin
+      r2:=ARect;
+      r2.Left:=ARect.Right;
+      r2.Right:=ARect.Right+4000;
+      ACanvas.FillRect(r2);
+    end;
+  end;
 
   midY:=(ARect.Top+ARect.Bottom) div 2;
   gap:=round(5*uitextscale);

@@ -135,6 +135,38 @@ carries no libgcc/libstdc++/winpthread dependency.
   `Cheat Engine/MonoDataCollector/build-mingw-dll.sh` to cross-compile it from the in-tree C++ source with
   mingw-w64. Built & verified: PE32+ x86-64, `MDC_ServerPipe` DATA export, version 20240511, no runtime
   deps. Full recipe in "Build the Mono collector DLL". (New file, not a source edit → no upstream-rebase risk.)
+- **Dark mode (added 2026-07-02)** — CE already ships a full dark-mode engine (the bundled `betterControls`
+  unit + its custom-drawn `New*` controls), but it never activated under Wine: it triggers off the Windows
+  `AppsUseLightTheme` registry key (absent in our prefix) and pulls its palette from `OpenThemeData('ItemsView')`,
+  which returns 0 under Wine (no visual style) — so even when forced on, `newForm.pas` painted forms `$242424`
+  with **black text** (`ColorSet.FontColor` left at the light default). Fixed with two edits + one new file:
+  (1) added `-dFORCEDDARKMODE` to the **Release 64-Bit** build mode's CustomOptions in `cheatengine.lpi`
+  (mirrors the `-dlaztrunk` addition) → `betterControls.ShouldAppsUseDarkMode` returns true unconditionally,
+  bypassing every Wine-fragile gate; (2) new `Cheat Engine/cedarkmode.pas` (in the `.lpr` uses clause after
+  `betterControls`) whose `initialization` overwrites `betterControls.ColorSet` (`FontColor:=$E0E0E0` near-white
+  — the black-on-dark fix — plus dark backgrounds/buttons/checkboxes) and the `clWindow`/`clBtnFace`/`clWindowText`/…
+  override globals + `darkmodestring:=' dark'`, guarded by `if ShouldAppsUseDarkMode`. Runs before the first form
+  is created (unit inits precede `Application.CreateForm`). **Built & visually verified** (2026-07-02): whole UI
+  (main window, scan panel, tables, menus, dialogs) renders dark with readable light text; titlebar dark too
+  (KWin deco). The new file avoids editing vendored `betterControls` (clean upstream rebase); the `.lpi`/`.lpr`
+  edits are one line each. **Compiled into the exe → only live after `cheatengine-rebuild`.** Out of scope
+  (cheap follow-ups): the 7 forms whose `.lfm` hardcodes light colors, and dark syntax-highlighter presets for
+  the code editors (they load `…dark` registry profiles keyed off `darkmodestring`).
+  - **Polish pass (2026-07-02)** — first-pass feedback fixes. Palette in `cedarkmode.pas`: lifted
+    `TextBackground` `$202020`→`$2B2B2B` (lists were near-black). Edits to vendored `betterControls` (small,
+    localized): `newlistview.pas` — when `OpenThemeData` fails under Wine (theme=0) fall back to
+    `colorset.TextBackground/FontColor` instead of leaving the found-list bg at 0 (pure black);
+    `newheadercontrol.pas` — force `canvas.Font.Color:=colorset.FontColor` (header text was unreadable) and a
+    slightly-lighter header strip; `newmainmenu.pas` `drawScaled` — extend the last visible top-level bar item to
+    fill the bar (the white gap right of "Help" appeared only on the **UI-scaled** menu path). Scrollbars/disabled
+    edits are drawn by **Wine using GDI system colours** (per-window `SetWindowTheme('DarkMode_Explorer')` is a
+    no-op under Wine), so `cedarkmode.pas` now calls **`SetSysColors`** to darken `COLOR_SCROLLBAR/BTNFACE/WINDOW/
+    3DDKSHADOW/…` — this darkens scrollbar **arrow buttons**, disabled-edit backgrounds, native combo buttons and
+    tooltips. **Still light: the scrollbar trough/thumb** inside lists — Wine draws those *themed* (via the lists'
+    `'Explorer'` window theme), ignoring syscolors; fully darkening them needs forcing **classic (unthemed)**
+    scrollbars (`SetWindowTheme(h,'','')` on lists/trees), which also changes row-selection rendering — left as an
+    opt-in. Caveat: `SetSysColors` is Wine-session-scoped; in the injected-into-game case CE runs in the game's
+    proton prefix, so it also touches that prefix's syscolors (harmless for GPU-rendered games).
 
 ### Build gotcha: non-deterministic FPC internal errors (ICE)
 FPC sometimes aborts with `Internal error <n>` / `(1026) Compilation raised exception internally` at a

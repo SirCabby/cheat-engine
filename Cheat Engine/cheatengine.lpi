@@ -92,7 +92,8 @@
 -dTHREADNAMESUPPORT
 -donebytejumps
 -dNoODS
--dlaztrunk"/>
+-dlaztrunk
+-dFORCEDDARKMODE"/>
             <OtherDefines Count="20">
               <Define0 Value="NOTMULTITHREADED"/>
               <Define1 Value="benchmarkps"/>
