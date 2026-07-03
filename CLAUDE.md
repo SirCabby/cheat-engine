@@ -216,6 +216,58 @@ carries no libgcc/libstdc++/winpthread dependency.
     forcing the persisted flag on launches collapsed with the strip (process/open/save + progress bar + Settings)
     over the cheat list and the button reading "Show Scan Controls". **Compiled into the exe → only live after
     `cheatengine-rebuild`.** Localized (no vendored-unit edits), low upstream-rebase risk.
+- **Checkbox/radiobutton text not UI-scaling (added 2026-07-03)** — under forced dark mode the `betterControls`
+  custom paint draws checkboxes/radios itself, and `newcheckbox.pas`/`newradiobutton.pas` `DefaultCustomPaint`
+  did `fcanvas.font.size:=font.size` — copying only the **point size**, so the canvas re-derived pixel Height from
+  the screen DPI (always 96 under Wine) and dropped the scaled `Font.Height` that `uitextscale`'s `AutoAdjustLayout`
+  had applied. Result: the box glyph grew (it's tied to `clientheight`) but the caption stayed base-size. Fixed by
+  assigning the **full font** (`fcanvas.font:=font`) in both paint routines (+ the radiobutton `GetPreferredSize`),
+  mirroring `newbutton` (which relies on `FontChanged`'s full `fCanvas.Font:=Font` and never resets the size).
+  Built & **verified** at 150% (screenshot): scan-panel checkbox captions now scale with the rest of the UI. Two
+  one-line edits to vendored `betterControls` (small, localized).
+- **Cheat-table columns collapse under UI scaling → descriptions "erased" (added 2026-07-03)** — after several
+  restarts at a non-100% `uitextscale`, the whole cheat-table row text (descriptions/address/type/value) plus the
+  Description/Address/Type/Value **header captions** vanished (only the "Active" column + the custom checkbox glyphs
+  showed). Cause: LCL's `TCustomHeaderControl.DoAutoAdjustLayout` multiplies every header **section width** by the
+  scale proportion on each show, but `MainUnit.pas` `FormClose` saved those widths (the `x[0..4]` extra array in
+  `SaveFormPosition`) at their **scaled** on-screen value while `LoadFormPosition` re-scaled them again on load — so
+  they **compounded ×uitextscale every restart** (the window width/height were already saved as base `÷uitextscale`
+  by the earlier "window scaling" work, but the column widths were missed). They eventually blew past
+  `THeaderSection`'s default `MaxWidth=10000`; column 0 (Active) grew to ~1140px and filled the window, pushing every
+  text column thousands of px off-screen (checkboxes still drew — they don't use section geometry). Fixed in
+  `MainUnit.pas`: (1) **save** column widths + the found-list column as base (`round(Width/uitextscale)`), matching
+  the existing `panel5.Height` line; (2) on **load**, sanity-guard the restored widths (all >0 and
+  `x[0]+x[1]+x[2]+x[3] < screen.Width`) and fall back to the design defaults on garbage, so an already-corrupted
+  registry self-heals. Root cause was confirmed by decoding the actual saved blob (Active=1140, others=10000) and
+  **verified** by launching the rebuilt exe against those exact values (screenshot: full header + visible
+  descriptions restored). Compiled into the exe → **only live after `cheatengine-rebuild`.** Localized to `FormShow`
+  create + `FormClose` save, low upstream-rebase risk.
+- **Confirmation popups (MessageDlg/ShowMessage) not UI-scaling (added 2026-07-03)** — `uitextscaling.pas`
+  installs `PromptDialogFunction := @scaledPromptDialogSafe` intending all `MessageDlg`/`ShowMessage` popups to
+  render via the fork's scalable `scaledPromptDialog` (a real `TForm` + `TBitBtn`s at the scaled size). But on
+  the win32/64 widgetset `TWin32WidgetSet.PromptUser` calls the **native `TaskDialogIndirect`** (Wine-drawn,
+  unscalable) whenever `WindowsVersion >= wvVista` — only otherwise does it fall back to `inherited PromptUser`,
+  the branch that actually reaches `PromptDialogFunction`. Under Wine that gate is always true, so e.g. the "Keep
+  the current address list/code list?" confirmation on attaching a table stayed at base size. Two fixes in
+  `uitextscaling.pas`: (1) in `InitUITextScale` (only ever called when a scale is active), drop the detected
+  version below Vista (`if WindowsVersion >= wvVista then WindowsVersion := wvServer2003`, guarded `{$ifdef
+  windows}`, uses `win32proc`) so the widgetset routes popups to our scalable dialog; (2) fix a latent bug in
+  `scaledPromptDialog` — as a `PromptDialogFunction` it must return an `idButtonXXX` (LCL's `PromptUser` indexes
+  `DialogResults[]` with it), but it returned the raw `mrXXX` from `ShowModal`, which — once the path was actually
+  reached — would have mapped e.g. Yes to Close. Added the `mr*`→`idButton*` mapping like LCL's `DefaultPromptDialog`.
+  Lowering `WindowsVersion` is safe here: it's a Wine-only fork, `getDPIScaleFactor` keys off
+  `screen.PixelsPerInch` (not this), and the other sub-Vista code paths it flips are cosmetic (edit-box margin
+  fallback) or Wine no-ops (native taskbar / `ChangeWindowMessageFilter` UIPI). **Verified** at 150% via a temp
+  autorun `messageDialog(...)` (screenshot: scaled confirmation text + Yes/No buttons; temp script removed after).
+  Compiled into the exe → **only live after `cheatengine-rebuild`.** Two localized edits, low upstream-rebase risk.
+  - **Popup didn't size to its text (follow-up, same day)** — with the routing fixed, longer confirmation
+    messages were clipped on the right: `scaledPromptDialog` read a `WordWrap`+`AutoSize` `TLabel`'s
+    `Width`/`Height` during construction, before the wrapped extent is computed (no handle yet), so the form
+    came out too narrow. Replaced that with an explicit up-front measure of the wrapped text
+    (`LCLIntf.DrawText` + `DT_CALCRECT or DT_WORDBREAK` on a scratch `TBitmap` canvas whose font is the scaled
+    `f.Font` — with a `TextWidth('W')` call first to force the font into the DC), then size the label
+    (`AutoSize:=False`, explicit bounds) and the form to that box. **Verified** at 150% (screenshot: a long
+    3-line message wraps with clean margins on both edges, popup grown to fit).
 
 ### Build gotcha: non-deterministic FPC internal errors (ICE)
 FPC sometimes aborts with `Internal error <n>` / `(1026) Compilation raised exception internally` at a

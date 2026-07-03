@@ -27,7 +27,7 @@ implementation
 
 uses
   SysUtils, Menus, StdCtrls, Buttons, Graphics, LCLType, Dialogs, InterfaceBase,
-  SynCompletion, globals;
+  SynCompletion, LCLIntf, globals{$ifdef windows}, win32proc{$endif};
 
 type
   TUIScaler = class
@@ -101,6 +101,9 @@ var
   btn: TBitBtn;
   i, m, bw, bh, gap, bx, by, cw: integer;
   kind: TBitBtnKind;
+  measure: TBitmap;
+  tr: TRect;
+  lblw, lblh, maxw: integer;
 begin
   f := TForm.CreateNew(nil);
   try
@@ -119,16 +122,36 @@ begin
     if UseDefaultPos then f.Position := poScreenCenter
     else begin f.Position := poDesigned; f.Left := X; f.Top := Y; end;
 
+    // Measure the word-wrapped message with the scaled font up front. A WordWrap+AutoSize TLabel's
+    // Width/Height can't be read reliably during construction (the wrapped extent isn't computed
+    // until it has a handle), which left the form too narrow and clipped the text. DT_CALCRECT gives
+    // the exact wrapped box; we then size the label and form to it.
+    maxw := round(560 * uitextscale);
+    measure := TBitmap.Create;
+    try
+      measure.SetSize(1, 1);
+      measure.Canvas.Font.Assign(f.Font);
+      measure.Canvas.TextWidth('W'); //force LCL to select the font into the DC before the raw DrawText
+      tr := Rect(0, 0, maxw, 0);
+      LCLIntf.DrawText(measure.Canvas.Handle, PChar(DialogMessage), Length(DialogMessage), tr,
+                       DT_CALCRECT or DT_WORDBREAK or DT_NOPREFIX);
+      lblw := tr.Right - tr.Left;
+      lblh := tr.Bottom - tr.Top;
+    finally
+      measure.Free;
+    end;
+    if lblw < 1 then lblw := 1;
+    if lblh < 1 then lblh := 1;
+
     lbl := TLabel.Create(f);
     lbl.Parent := f;
-    lbl.Left := m; lbl.Top := m;
-    lbl.Constraints.MaxWidth := round(560 * uitextscale);
     lbl.WordWrap := True;
-    lbl.AutoSize := True;
+    lbl.AutoSize := False;
+    lbl.SetBounds(m, m, lblw, lblh);
     lbl.Caption := DialogMessage;
 
-    by := lbl.Top + lbl.Height + m;
-    cw := lbl.Left + lbl.Width + m;
+    by := m + lblh + m;
+    cw := m + lblw + m;
     if cw < 2*m + ButtonCount*bw + (ButtonCount-1)*gap then
       cw := 2*m + ButtonCount*bw + (ButtonCount-1)*gap;
     f.ClientWidth := cw;
@@ -161,7 +184,23 @@ begin
       inc(bx, bw + gap);
     end;
 
-    Result := f.ShowModal;
+    // PromptUser indexes DialogResults[] with our return value, so it must be an idButtonXXX
+    // (like LCL's DefaultPromptDialog), NOT the raw mrXXX that ShowModal/the TBitBtn kinds give.
+    case f.ShowModal of
+      mrOk:       Result := idButtonOK;
+      mrCancel:   Result := idButtonCancel;
+      mrYes:      Result := idButtonYes;
+      mrNo:       Result := idButtonNo;
+      mrAbort:    Result := idButtonAbort;
+      mrRetry:    Result := idButtonRetry;
+      mrIgnore:   Result := idButtonIgnore;
+      mrAll:      Result := idButtonAll;
+      mrYesToAll: Result := idButtonYesToAll;
+      mrNoToAll:  Result := idButtonNoToAll;
+      mrClose:    Result := idButtonClose;
+    else
+      Result := EscapeResult;
+    end;
   finally
     f.Free;
   end;
@@ -188,6 +227,16 @@ begin
   Screen.AddHandlerRemoveForm(@uiscaler.onFormRemove);
   //route MessageDlg/ShowMessage through our scalable dialog while a scale is active
   PromptDialogFunction := @scaledPromptDialogSafe;
+  {$ifdef windows}
+  //...but on the win32/64 widgetset MessageDlg/ShowMessage call the native (Wine-drawn, unscalable)
+  //TaskDialogIndirect whenever WindowsVersion>=Vista, which bypasses PromptDialogFunction entirely.
+  //Drop the detected version just below Vista so the widgetset falls back to our scalable dialog.
+  //This is a Wine-only fork and only runs when a scale is active; the other sub-Vista code paths it
+  //flips are cosmetic or no-ops under Wine (edit-box margin fallback; native taskbar/UIPI calls Wine
+  //ignores). getDPIScaleFactor keys off screen.PixelsPerInch, not this, so scaling is unaffected.
+  if WindowsVersion >= wvVista then
+    WindowsVersion := wvServer2003;
+  {$endif}
 end;
 
 procedure ApplyUITextScale(newPercent: integer);

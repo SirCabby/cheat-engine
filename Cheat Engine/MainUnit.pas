@@ -6374,16 +6374,26 @@ begin
   symhandler.loadCommonModuleList;
 
   setlength(x, 7);
-  if loadformposition(self, x) then
+  if loadformposition(self, x) and (length(x)>=7) then
   begin
     autosize:=false;
-    addresslist.headers.Sections[0].Width := x[0];
-    addresslist.headers.Sections[1].Width := x[1];
-    addresslist.headers.Sections[2].Width := x[2];
-    addresslist.headers.Sections[3].Width := x[3];
-    addresslist.headers.Sections[4].Width := x[4];
+    //Restore saved cheat-table column widths only if they look sane. A UI-scaling bug used to
+    //re-scale (and thus compound) these on every restart until the fixed columns blew past
+    //THeaderSection's 10000 MaxWidth: column 0 then filled the whole window and pushed the
+    //description/address/value columns (and all their text) off-screen. Reject garbage so we
+    //fall back to the design defaults instead. The save side now stores base (unscaled) widths.
+    if (x[0]>0) and (x[1]>0) and (x[2]>0) and (x[3]>0) and (x[4]>0) and
+       (x[0]+x[1]+x[2]+x[3] < screen.Width) then
+    begin
+      addresslist.headers.Sections[0].Width := x[0];
+      addresslist.headers.Sections[1].Width := x[1];
+      addresslist.headers.Sections[2].Width := x[2];
+      addresslist.headers.Sections[3].Width := x[3];
+      addresslist.headers.Sections[4].Width := x[4];
+    end;
     panel5.Height := x[5];
-    foundlist3.columns[0].Width := x[6];
+    if (x[6]>0) and (x[6]<screen.Width) then
+      foundlist3.columns[0].Width := x[6];
   end;
 
   mainform:=self;
@@ -10970,13 +10980,16 @@ begin
   end;
 
   setlength(x,7);
-  x[0]:=addresslist.headers.Sections[0].Width;
-  x[1]:=addresslist.headers.Sections[1].Width;
-  x[2]:=addresslist.headers.Sections[2].Width;
-  x[3]:=addresslist.headers.Sections[3].Width;
-  x[4]:=addresslist.headers.Sections[4].Width;
+  //store base (unscaled) sizes: AutoAdjustLayout re-scales header sections and listview columns
+  //by uitextscale on reload, so persisting the scaled value would compound them every restart
+  //(that pushed the cheat-table text columns off-screen — see the sanity guard where these load).
+  x[0]:=round(addresslist.headers.Sections[0].Width/uitextscale);
+  x[1]:=round(addresslist.headers.Sections[1].Width/uitextscale);
+  x[2]:=round(addresslist.headers.Sections[2].Width/uitextscale);
+  x[3]:=round(addresslist.headers.Sections[3].Width/uitextscale);
+  x[4]:=round(addresslist.headers.Sections[4].Width/uitextscale);
   x[5]:=round(panel5.Height/uitextscale); //store base (unscaled) divider height so scaling doesn't compound on reload
-  x[6]:=foundlist3.columns[0].Width;
+  x[6]:=round(foundlist3.columns[0].Width/uitextscale);
 
   saveformposition(self, x);
 

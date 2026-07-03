@@ -160,7 +160,7 @@ begin
     fcanvas.brush.style:=bsSolid;
     fcanvas.brush.color:=facecolor;
     fcanvas.Clear;
-    fcanvas.font.size:=font.size;
+    fcanvas.font:=font; //full font (incl. scaled Height): a point-size-only copy re-derives Height from the canvas PPI, dropping uitextscale under Wine
 
 
     fcanvas.pen.Width:=1;

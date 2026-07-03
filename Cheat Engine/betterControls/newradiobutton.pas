@@ -46,7 +46,7 @@ begin
   if ShouldAppsUseDarkMode and (font<>nil) then
   begin
     dpiscale:=Screen.PixelsPerInch/96;
-    fcanvas.font.size:=font.size;
+    fcanvas.font:=font; //match newCheckbox.GetPreferredSize: keep the scaled Height, not just the point size
     r:=rect(trunc(dpiscale)-1,trunc(3*dpiscale),(trunc(dpiscale)-1)*2+PreferredHeight-trunc((3*dpiscale)*2),(trunc(dpiscale)-1)+PreferredHeight-trunc((3*dpiscale)));
     x:=r.right+trunc(3*dpiscale);
    // x:=x+fcanvas.TextWidth(caption);
@@ -131,7 +131,7 @@ begin
     fcanvas.brush.color:=facecolor;
     fcanvas.Clear;
 
-    fcanvas.font.size:=font.size;
+    fcanvas.font:=font; //full font (incl. scaled Height): a point-size-only copy re-derives Height from the canvas PPI, dropping uitextscale under Wine
 
     fcanvas.pen.Width:=1;
     if enabled then
