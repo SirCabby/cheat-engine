@@ -6047,14 +6047,20 @@ begin
 
 
 //  if FileExists();
+  //Personal fork: our from-source build always ships cheatengine-x86_64.dbg next to the
+  //exe, so upstream's "enable debug logging whenever the .DBG symbols exist" check created
+  //cedebug.txt on every launch. Require an explicit CEDEBUG command-line flag to opt in.
+  createlog:=false;
   s:=ChangeFileExt(application.exename,'.DBG');
   if FileExists(s) then
   begin
-    createlog:=true;
-    cedebugsymbolspresent:=true;
-  end
-  else
-    createlog:=false;
+    for i:=1 to ParamCount do
+      if uppercase(ParamStr(i))='CEDEBUG' then
+      begin
+        createlog:=true;
+        cedebugsymbolspresent:=true;
+      end;
+  end;
 
   miEnableLCLDebug.Checked:=createlog;
 

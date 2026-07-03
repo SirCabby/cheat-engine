@@ -129,6 +129,14 @@ carries no libgcc/libstdc++/winpthread dependency.
   loading a `.CT` whose `CheatEngineTableVersion` (>45 for e.g. 7.7 tables) exceeds our 7.5.1 build's
   `_CurrentTableVersion=45`. This is the popup that looks like an update nag "on launch" (it's really
   on table-load). NOTE: this is the compiled exe, so **it only takes effect after `cheatengine-rebuild`**.
+- **`cedebug.txt` spam gated behind a flag (added 2026-07-02)** — `Cheat Engine/MainUnit.pas` ~6050
+  (`FormCreate`): upstream sets `createlog:=true` (→ `EnableLCLClick` → creates/truncates `cedebug.txt`
+  in the CWD) whenever a `.DBG` symbols file sits next to the exe. Our from-source build **always** ships
+  `cheatengine-x86_64.dbg` there, so `cedebug.txt` was regenerated on **every** launch. Changed the check
+  to also require an explicit **`CEDEBUG`** command-line arg (bare uppercase flag, matching CE's own
+  `NOAUTORUN` idiom) before setting `createlog`/`cedebugsymbolspresent`. Default launch → no log file; run
+  the exe with `CEDEBUG` in argv to opt back in. Compiled into the exe, so **only live after
+  `cheatengine-rebuild`**. (One localized edit in `FormCreate`; low upstream-rebase risk.)
 - **Mono collector DLL build (added 2026-07-02)** — Mono scripts on Blasphemous failed with "DLL Injection
   failed or invalid DLL version" because the injected `MonoDataCollector64.dll` doesn't exist in a
   from-source build (upstream dropped the prebuilt Mono DLLs in 2021; `bin/` is gitignored). Added
