@@ -27,7 +27,7 @@ implementation
 
 uses
   SysUtils, Menus, StdCtrls, Buttons, Graphics, LCLType, Dialogs, InterfaceBase,
-  SynCompletion, LCLIntf, globals{$ifdef windows}, win32proc{$endif};
+  SynCompletion, LCLIntf, globals, newButton{$ifdef windows}, win32proc{$endif};
 
 type
   TUIScaler = class
@@ -98,7 +98,7 @@ function scaledPromptDialog(const DialogCaption, DialogMessage: String;
 var
   f: TForm;
   lbl: TLabel;
-  btn: TBitBtn;
+  btn: TNewButton;
   i, m, bw, bh, gap, bx, by, cw: integer;
   kind: TBitBtnKind;
   measure: TBitmap;
@@ -175,9 +175,16 @@ begin
         idButtonNoToAll:  kind := bkNoToAll;
         else raise Exception.Create('unhandled dialog button'); //-> fall back to the stock dialog
       end;
-      btn := TBitBtn.Create(f);
+      // Build the buttons as betterControls' custom-drawn TNewButton (aliased to TButton
+      // in the rest of the UI), not a native TBitBtn. Under Wine the native button face
+      // renders white regardless of the dark syscolors, whereas TNewButton paints its own
+      // dark face when ShouldAppsUseDarkMode is set (forced on via -dFORCEDDARKMODE). It has
+      // no Kind property, so set the caption/ModalResult the way the kind would have, reusing
+      // LCL's own id->caption and kind->ModalResult tables so the labels/results are identical.
+      btn := TNewButton.Create(f);
       btn.Parent := f;
-      btn.Kind := kind;
+      btn.Caption := GetButtonCaption(Buttons[i]);
+      btn.ModalResult := BitBtnModalResults[kind];
       btn.AutoSize := False;
       btn.SetBounds(bx, by, bw, bh);
       if i = DefaultIndex then btn.Default := True;

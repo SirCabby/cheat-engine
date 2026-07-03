@@ -268,6 +268,24 @@ carries no libgcc/libstdc++/winpthread dependency.
     `f.Font` — with a `TextWidth('W')` call first to force the font into the DC), then size the label
     (`AutoSize:=False`, explicit bounds) and the form to that box. **Verified** at 150% (screenshot: a long
     3-line message wraps with clean margins on both edges, popup grown to fit).
+  - **Yes/No buttons stayed white in dark mode (follow-up, added 2026-07-03)** — the scaled confirmation
+    popup rendered dark (form bg + label) **except its buttons**, which stayed white. Cause: `scaledPromptDialog`
+    built them as native `TBitBtn`s. `betterControls` only dark-custom-draws its `New*` controls (and only
+    aliases `TButton`→`TNewButton`, **not** `TBitBtn`), so a native `TBitBtn` under Wine draws its face white
+    regardless of the dark syscolors `cedarkmode.SetDarkSysColors` sets (which is why the plain `TForm` bg
+    *did* go dark via `clBtnFace`). Fixed in `uitextscaling.pas`: added `newButton` to the impl `uses` and build
+    the buttons as **`TNewButton`** (the same custom-drawn class every other CE button already uses) instead of
+    `TBitBtn`. `TNewButton` has no `Kind` property, so caption/ModalResult are set explicitly from LCL's own
+    `Buttons.GetButtonCaption(id)` and `Buttons.BitBtnModalResults[kind]` tables (kept the existing
+    `id→TBitBtnKind` case for the lookup + its unknown-button `raise`→stock-dialog fallback), so labels/results
+    are byte-identical to before. `TNewButton` paints its dark face via `DefaultCustomPaint` whenever
+    `ShouldAppsUseDarkMode` (forced on by `-dFORCEDDARKMODE`); in a hypothetical light build it falls back to the
+    native paint, so no light-mode regression. Confirmed the user is at **150%** scale (registry `UI Text Scale`
+    =0x96), i.e. the `scaledPromptDialog` path is the one they hit (the custom dialog is only installed when
+    `uitextscale<>1.0`). Built clean; **live visual check skipped** — CE was already running attached to a live
+    Blasphemous session, so a second instance would have disrupted it. Compiled into the exe → **only live after
+    `cheatengine-rebuild`** (and a CE restart). Two localized edits (`uses` line + button block), low
+    upstream-rebase risk.
 
 ### Build gotcha: non-deterministic FPC internal errors (ICE)
 FPC sometimes aborts with `Internal error <n>` / `(1026) Compilation raised exception internally` at a
