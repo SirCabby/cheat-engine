@@ -175,6 +175,10 @@ var
   p2: LPNMCUSTOMDRAW;
   columnid: integer;
   c: tcolor;
+  br: HBRUSH;
+  r, r2: TRect;
+  txt: string;
+  dtflags: DWORD;
 begin
 
     p1:=LPNMHDR(msg.lparam);
@@ -187,16 +191,52 @@ begin
         CDDS_PREPAINT: msg.Result:=CDRF_NOTIFYITEMDRAW;
         CDDS_ITEMPREPAINT:
         begin
-          msg.result:=CDRF_DODEFAULT;
           columnid:=p2^.dwItemSpec;
 
-          if (columnid>=0) and (columnid<columncount) and (column[columnid].tag<>0) then
-            c:=column[columnid].tag
+          if ShouldAppsUseDarkMode and (p1^.hwndFrom = ListView_GetHeader(handle)) then
+          begin
+            //Wine draws the native listview header light-on-light (its 'ItemsView'
+            //dark theme doesn't exist), so own-draw it: dark strip + readable light
+            //text. CDRF_SKIPDEFAULT so this wins regardless of the (missing) theme.
+            br:=CreateSolidBrush(ColorToRGB(incColor(colorset.TextBackground,10)));
+            FillRect(p2^.hdc, p2^.rc, br);
+            DeleteObject(br);
+
+            //subtle right-edge column divider
+            br:=CreateSolidBrush(ColorToRGB(colorset.ButtonBorderColor));
+            r2:=p2^.rc; r2.left:=r2.right-1;
+            FillRect(p2^.hdc, r2, br);
+            DeleteObject(br);
+
+            if (columnid>=0) and (columnid<columncount) then
+            begin
+              txt:=column[columnid].Caption;
+              case column[columnid].Alignment of
+                taCenter:       dtflags:=DT_CENTER;
+                taRightJustify: dtflags:=DT_RIGHT;
+              else              dtflags:=DT_LEFT;
+              end;
+              r:=p2^.rc;
+              inc(r.left,5); dec(r.right,5);
+              SetTextColor(p2^.hdc, ColorToRGB(colorset.FontColor));
+              SetBkMode(p2^.hdc, TRANSPARENT);
+              DrawText(p2^.hdc, PChar(txt), length(txt), r,
+                       dtflags or DT_VCENTER or DT_SINGLELINE or DT_END_ELLIPSIS or DT_NOPREFIX);
+            end;
+
+            msg.result:=CDRF_SKIPDEFAULT;
+          end
           else
-            c:=clWindowtext;
+          begin
+            msg.result:=CDRF_DODEFAULT;
 
+            if (columnid>=0) and (columnid<columncount) and (column[columnid].tag<>0) then
+              c:=column[columnid].tag
+            else
+              c:=clWindowtext;
 
-          SetTextColor(p2^.hdc, c);
+            SetTextColor(p2^.hdc, c);
+          end;
         end;
       end;
     end;

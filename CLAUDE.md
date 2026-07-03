@@ -167,6 +167,15 @@ carries no libgcc/libstdc++/winpthread dependency.
     scrollbars (`SetWindowTheme(h,'','')` on lists/trees), which also changes row-selection rendering — left as an
     opt-in. Caveat: `SetSysColors` is Wine-session-scoped; in the injected-into-game case CE runs in the game's
     proton prefix, so it also touches that prefix's syscolors (harmless for GPU-rendered games).
+  - **Native listview header own-draw (2026-07-02)** — the column headers of every `TListView` (found-list
+    "Address/Value/Previous", Advanced Options `lvCodelist`, etc.) rendered **light-on-light / unreadable** under
+    Wine: `newlistview.pas`'s `pp` (the listview's `WM_NOTIFY` handler for its header's `NM_CUSTOMDRAW`) set the
+    header *text* to `clWindowtext` (light) but never painted the background — on real Windows the `'ItemsView'`
+    theme supplies a dark header, but Wine has no such theme so the strip stayed light. Fixed by making `pp`
+    **own-draw** header sections when `hwndFrom = ListView_GetHeader(handle)`: fill a dark strip
+    (`incColor(TextBackground,10)`) + a `ButtonBorderColor` divider, draw the caption with `colorset.FontColor` via
+    `DrawText`, return `CDRF_SKIPDEFAULT` so it wins regardless of the (missing) theme. One edit, covers all
+    `TListView` headers app-wide.
 
 ### Build gotcha: non-deterministic FPC internal errors (ICE)
 FPC sometimes aborts with `Internal error <n>` / `(1026) Compilation raised exception internally` at a
