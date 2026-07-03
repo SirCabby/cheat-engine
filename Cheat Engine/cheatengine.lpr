@@ -18,7 +18,7 @@ uses
   macport, macportdefines,coresymbolication, macexceptiondebuggerinterface,
   macCreateRemoteThread, macumm, machotkeys, macPipe,
   {$endif}
-  betterControls, controls, sysutils, Forms, LazUTF8, dialogs, SynCompletion,
+  betterControls, controls, sysutils, Classes, Forms, LazUTF8, dialogs, SynCompletion,
   MainUnit, CEDebugger, NewKernelHandler, CEFuncProc, ProcessHandlerUnit,
   symbolhandler, Assemblerunit, hypermode, byteinterpreter, addressparser,
   autoassembler, ProcessWindowUnit, MainUnit2, Filehandler,
@@ -97,7 +97,7 @@ uses
   PointerscanWorker, PointerscanStructures, PointerscanController, zstreamext,
   PointerscanConnector, PointerscanNetworkStructures, AsyncTimer,
   PointerscanSettingsIPConnectionList, MemoryStreamReader, commonTypeDefs,
-  Parsers, Globals, NullStream, RipRelativeScanner, LuaRIPRelativeScanner,
+  Parsers, Globals, uitextscaling, NullStream, RipRelativeScanner, LuaRIPRelativeScanner,
   VirtualQueryExCache, disassemblerthumb, AccessedMemory, LuaStructureFrm,
   MemoryQuery, pointerparser, GnuAssembler, binutils, dbvmLoadManual, mikmod,
   frmEditHistoryUnit, LuaInternet, xinput, frmUltimap2Unit, cpuidunit, libipt,
@@ -305,6 +305,7 @@ begin
 
 
   overridefont:=nil;
+  ff:=nil;
   noautorun:=false;
 
   getcedir;
@@ -351,6 +352,13 @@ begin
         end;
       end;
 
+      if r.ValueExists('UI Text Scale') then
+      begin
+        uitextscale:=r.ReadInteger('UI Text Scale')/100;
+        if uitextscale<1.0 then uitextscale:=1.0;
+        if uitextscale>4.0 then uitextscale:=4.0;
+      end;
+
       if r.ValueExists('Override Default Font') then
       begin
         if r.ReadBool('Override Default Font') then
@@ -388,6 +396,9 @@ begin
     if uppercase(ParamStr(i))='NOAUTORUN' then  //don't load any extentions yet
       noautorun:=true;
   end;
+
+  if uitextscale<>1.0 then
+    InitUITextScale;
 
 
 

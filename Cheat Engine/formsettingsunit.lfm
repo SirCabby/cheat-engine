@@ -332,7 +332,7 @@ object formSettings: TformSettings
           end
           object cbSaveWindowPos: TCheckBox
             AnchorSideLeft.Control = ScrollBox1
-            AnchorSideTop.Control = cbOverrideDefaultFont
+            AnchorSideTop.Control = seUITextScale
             AnchorSideTop.Side = asrBottom
             Left = 0
             Height = 19
@@ -474,6 +474,33 @@ object formSettings: TformSettings
             Enabled = False
             OnClick = btnSetFontClick
             TabOrder = 17
+          end
+          object lblUITextScale: TLabel
+            AnchorSideLeft.Control = ScrollBox1
+            AnchorSideTop.Control = seUITextScale
+            AnchorSideTop.Side = asrCenter
+            Left = 0
+            Height = 15
+            Top = 248
+            Width = 197
+            Caption = 'UI text scale %'
+          end
+          object seUITextScale: TSpinEdit
+            AnchorSideLeft.Control = lblUITextScale
+            AnchorSideLeft.Side = asrBottom
+            AnchorSideTop.Control = cbOverrideDefaultFont
+            AnchorSideTop.Side = asrBottom
+            Left = 202
+            Height = 23
+            Top = 244
+            Width = 70
+            BorderSpacing.Left = 5
+            BorderSpacing.Top = 4
+            Increment = 10
+            MaxValue = 400
+            MinValue = 100
+            TabOrder = 19
+            Value = 100
           end
           object cbDPIAware: TCheckBox
             AnchorSideLeft.Control = ScrollBox1

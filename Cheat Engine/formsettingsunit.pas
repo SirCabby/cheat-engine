@@ -12,10 +12,10 @@ uses
   windows, win32proc,
   {$endif}LCLProc, LCLIntf, LCLType, Messages, SysUtils, Classes, Graphics, Controls, Forms, Dialogs,
   StdCtrls,registry, Menus,ComCtrls,CEFuncProc,ExtCtrls,{tlhelp32,}CheckLst,
-  Buttons, LResources, frameHotkeyConfigUnit, math,
+  Buttons, LResources, frameHotkeyConfigUnit, math, Spin,
 
   KernelDebugger,plugin,NewKernelHandler,CEDebugger,hotkeyhandler, debugHelper,
-  formhotkeyunit, debuggertypedefinitions, FileUtil, IniFiles, betterControls;
+  formhotkeyunit, debuggertypedefinitions, FileUtil, IniFiles, betterControls, uitextscaling;
 
 
 type Tpathspecifier=class(TObject)
@@ -68,6 +68,8 @@ type
     CheckBox1: TCheckBox;
     cbOverrideDefaultFont: TCheckBox;
     cbDPIAware: TCheckBox;
+    seUITextScale: TSpinEdit;
+    lblUITextScale: TLabel;
     cbShowLanguageMenuItem: TCheckBox;
     cbProcessWatcherOpensHandles: TCheckBox;
     cbAlwaysSignTable: TCheckBox;
@@ -1020,6 +1022,7 @@ begin
 
         reg.WriteBool('DPI Aware', cbDPIAware.Checked);
         reg.writebool('Override Default Font', cbOverrideDefaultFont.Checked);
+        reg.WriteInteger('UI Text Scale', seUITextScale.Value);
 
         reg.writebool('Never Change Protection', cbNeverChangeProtection.checked);
         SkipVirtualProtectEx:=cbNeverChangeProtection.checked;
@@ -1193,6 +1196,8 @@ begin
       mainform.Menu:=mainform.MainMenu1
     else
       mainform.Menu:=nil;
+
+    ApplyUITextScale(seUITextScale.Value); //live-apply the UI text scale to all open forms (no restart)
 
     modalresult:=mrok;
 

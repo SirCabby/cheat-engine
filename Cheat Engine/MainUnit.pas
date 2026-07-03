@@ -8940,6 +8940,16 @@ begin
 
   gbScanOptionsChangeBounds(panel5);
 
+  //Self-heal an oversized scan panel / window so the address list (cheat table) is always reachable.
+  //Even for a returning user (cleanrun=false, so the block above is skipped), clamp the form to the
+  //screen and cap Panel5 (alTop) so Panel1 (alClient, the cheat table) + Panel4 (alBottom) stay
+  //visible. This recovers from a stale Panel5/window height that an older build compounded while the
+  //UI was scaled, and re-saves the sane value on exit.
+  if Height>Monitor.WorkareaRect.Height then Height:=Monitor.WorkareaRect.Height;
+  i:=ClientHeight-Panel4.Height-Splitter1.Height-round(150*uitextscale); //leave a usable cheat table
+  if (i>round(40*uitextscale)) and (Panel5.Height>i) then
+    Panel5.Height:=i;
+
 
   btnSetSpeedhack2.AutoSize:=false;
   btnSetSpeedhack2.Height:=btnAddAddressManually.Height;
@@ -10837,7 +10847,7 @@ begin
   x[2]:=addresslist.headers.Sections[2].Width;
   x[3]:=addresslist.headers.Sections[3].Width;
   x[4]:=addresslist.headers.Sections[4].Width;
-  x[5]:=panel5.Height;
+  x[5]:=round(panel5.Height/uitextscale); //store base (unscaled) divider height so scaling doesn't compound on reload
   x[6]:=foundlist3.columns[0].Width;
 
   saveformposition(self, x);

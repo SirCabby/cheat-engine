@@ -156,6 +156,7 @@ var
 
 
   fontmultiplication: single=1.0; //for some gui stuff
+  uitextscale: single=1.0; //UI text scale factor (1.0 = 100%). Set from the 'UI Text Scale' setting; restart to apply.
   istrainer: boolean=false;
   isExeTrainer: boolean=false;
 

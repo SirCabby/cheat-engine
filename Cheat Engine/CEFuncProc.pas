@@ -3170,10 +3170,12 @@ begin
           temp:=form.left;
           buf.Write(temp,sizeof(temp));
 
-          temp:=form.width;
+          //store base (unscaled) size: a scaled session multiplies these back up on reload
+          //via AutoAdjustLayout, so persisting the scaled value would compound every restart.
+          temp:=round(form.width/uitextscale);
           buf.Write(temp,sizeof(temp));
 
-          temp:=form.height;
+          temp:=round(form.height/uitextscale);
           buf.Write(temp,sizeof(temp));
 
 

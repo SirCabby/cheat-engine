@@ -3282,7 +3282,9 @@ begin
   fHexFont.Charset:=DEFAULT_CHARSET;
   fHexFont.Color:=clwindowText;
   {$IFNDEF STANDALONEHV}
-  fHexFont.Height:=GetFontData(MainForm.font.handle).Height;
+  //fold the UI text scale into the hex font: fHexFont is decoupled from the control font that
+  //AutoAdjustLayout scales, so seed it at base*uitextscale to match the scaled disassembler.
+  fHexFont.Height:=MulDiv(GetFontData(MainForm.font.handle).Height, round(96*uitextscale), 96);
   {$ENDIF}
   if fHexFont.Height>-13 then
     fHexFont.Height:=-13;

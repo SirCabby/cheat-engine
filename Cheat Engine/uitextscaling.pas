@@ -1,0 +1,224 @@
+unit uitextscaling;
+
+{
+  Central UI text-scaling machinery for Cheat Engine.
+
+  The scale factor lives in globals.uitextscale (1.0 = 100%). Each form is scaled
+  once, on its first show, from its design PPI to design PPI * uitextscale using
+  LCL's AutoAdjustLayout (which scales fonts AND control bounds, including
+  ParentFont=False controls). ApplyUITextScale re-scales all already-scaled forms
+  live so the user does not have to restart.
+}
+
+{$mode objfpc}{$H+}
+
+interface
+
+uses
+  Classes, Controls, Forms;
+
+// Register the screen hooks so forms scale to the current uitextscale as they show.
+procedure InitUITextScale;
+
+// Live-apply a new scale (percent, e.g. 150) to every open form and to future ones.
+procedure ApplyUITextScale(newPercent: integer);
+
+implementation
+
+uses
+  SysUtils, Menus, StdCtrls, Buttons, Graphics, LCLType, Dialogs, InterfaceBase,
+  SynCompletion, globals;
+
+type
+  TUIScaler = class
+  public
+    scaledForms: TList;
+    constructor Create;
+    destructor Destroy; override;
+    procedure onFormVisibleChanged(Sender: TObject; Form: TCustomForm);
+    procedure onFormRemove(Sender: TObject; Form: TCustomForm);
+  end;
+
+var
+  uiscaler: TUIScaler = nil;
+
+function baseFormPPI(Form: TCustomForm): integer;
+begin
+  Result := Form.DesignTimePPI; // 96 for almost every form; 120 for a couple; 0 for dynamically-built forms
+  if Result <= 0 then Result := 96;
+end;
+
+// Rescale a single form from one scale factor to another via AutoAdjustLayout.
+procedure scaleFormBetween(Form: TCustomForm; fromScale, toScale: single);
+var
+  base, frompp, topp: integer;
+begin
+  if (Form = nil) or (Form is TsynCompletionForm) then exit;
+  base := baseFormPPI(Form);
+  frompp := round(base * fromScale);
+  topp := round(base * toScale);
+  if frompp = topp then exit;
+  Form.AutoAdjustLayout(lapAutoAdjustForDPI, frompp, topp, Form.Width,
+                        round(Form.Width * topp / frompp));
+end;
+
+constructor TUIScaler.Create;
+begin
+  scaledForms := TList.Create;
+end;
+
+destructor TUIScaler.Destroy;
+begin
+  scaledForms.Free;
+  inherited Destroy;
+end;
+
+procedure TUIScaler.onFormVisibleChanged(Sender: TObject; Form: TCustomForm);
+begin
+  if (Form = nil) or (uitextscale = 1.0) or (Form is TsynCompletionForm) then exit;
+  if not Form.Visible then exit;                // snFormVisibleChanged also fires on hide
+  if scaledForms.IndexOf(Form) >= 0 then exit;  // AutoAdjustLayout is not idempotent - scale each form once
+  scaledForms.Add(Form);
+  scaleFormBetween(Form, 1.0, uitextscale);
+end;
+
+procedure TUIScaler.onFormRemove(Sender: TObject; Form: TCustomForm);
+begin
+  scaledForms.Remove(Form); // prevent stale-pointer reuse if a freed form's address is recycled
+end;
+
+// A control-based replacement for LCL's MessageDlg/ShowMessage dialog. LCL's TPromptDialog
+// custom-paints its text (measured with the canvas default font) and re-syncs its font to the
+// screen DPI at handle creation, so it can't be scaled from outside. This builds an ordinary form
+// with a real TLabel + TBitBtns at the scaled size instead. Falls back to the stock dialog on any
+// problem, so the worst case is an unscaled (but working) dialog.
+function scaledPromptDialog(const DialogCaption, DialogMessage: String;
+  DialogType: longint; Buttons: PLongint; ButtonCount, DefaultIndex, EscapeResult: Longint;
+  UseDefaultPos: boolean; X, Y: Longint): Longint;
+var
+  f: TForm;
+  lbl: TLabel;
+  btn: TBitBtn;
+  i, m, bw, bh, gap, bx, by, cw: integer;
+  kind: TBitBtnKind;
+begin
+  f := TForm.CreateNew(nil);
+  try
+    if uiscaler <> nil then
+      uiscaler.scaledForms.Add(f); //built already-scaled; keep the show hook from scaling it again
+
+    m := round(16 * uitextscale);
+    bw := round(85 * uitextscale);
+    bh := round(27 * uitextscale);
+    gap := round(8 * uitextscale);
+
+    f.BorderStyle := bsDialog;
+    f.BorderIcons := [biSystemMenu];
+    if DialogCaption <> '' then f.Caption := DialogCaption else f.Caption := 'Cheat Engine';
+    f.Font.Height := round(-12 * uitextscale);
+    if UseDefaultPos then f.Position := poScreenCenter
+    else begin f.Position := poDesigned; f.Left := X; f.Top := Y; end;
+
+    lbl := TLabel.Create(f);
+    lbl.Parent := f;
+    lbl.Left := m; lbl.Top := m;
+    lbl.Constraints.MaxWidth := round(560 * uitextscale);
+    lbl.WordWrap := True;
+    lbl.AutoSize := True;
+    lbl.Caption := DialogMessage;
+
+    by := lbl.Top + lbl.Height + m;
+    cw := lbl.Left + lbl.Width + m;
+    if cw < 2*m + ButtonCount*bw + (ButtonCount-1)*gap then
+      cw := 2*m + ButtonCount*bw + (ButtonCount-1)*gap;
+    f.ClientWidth := cw;
+    f.ClientHeight := by + bh + m;
+
+    bx := cw - m - (ButtonCount*bw + (ButtonCount-1)*gap);
+    for i := 0 to ButtonCount-1 do
+    begin
+      case Buttons[i] of
+        idButtonOk:       kind := bkOK;
+        idButtonCancel:   kind := bkCancel;
+        idButtonYes:      kind := bkYes;
+        idButtonNo:       kind := bkNo;
+        idButtonHelp:     kind := bkHelp;
+        idButtonClose:    kind := bkClose;
+        idButtonAbort:    kind := bkAbort;
+        idButtonRetry:    kind := bkRetry;
+        idButtonIgnore:   kind := bkIgnore;
+        idButtonAll:      kind := bkAll;
+        idButtonYesToAll: kind := bkYesToAll;
+        idButtonNoToAll:  kind := bkNoToAll;
+        else raise Exception.Create('unhandled dialog button'); //-> fall back to the stock dialog
+      end;
+      btn := TBitBtn.Create(f);
+      btn.Parent := f;
+      btn.Kind := kind;
+      btn.AutoSize := False;
+      btn.SetBounds(bx, by, bw, bh);
+      if i = DefaultIndex then btn.Default := True;
+      inc(bx, bw + gap);
+    end;
+
+    Result := f.ShowModal;
+  finally
+    f.Free;
+  end;
+end;
+
+function scaledPromptDialogSafe(const DialogCaption, DialogMessage: String;
+  DialogType: longint; Buttons: PLongint; ButtonCount, DefaultIndex, EscapeResult: Longint;
+  UseDefaultPos: boolean; X, Y: Longint): Longint;
+begin
+  try
+    Result := scaledPromptDialog(DialogCaption, DialogMessage, DialogType, Buttons,
+                                 ButtonCount, DefaultIndex, EscapeResult, UseDefaultPos, X, Y);
+  except
+    Result := DefaultPromptDialog(DialogCaption, DialogMessage, DialogType, Buttons,
+                                  ButtonCount, DefaultIndex, EscapeResult, UseDefaultPos, X, Y);
+  end;
+end;
+
+procedure InitUITextScale;
+begin
+  if uiscaler = nil then
+    uiscaler := TUIScaler.Create;
+  Screen.AddHandlerFormVisibleChanged(@uiscaler.onFormVisibleChanged);
+  Screen.AddHandlerRemoveForm(@uiscaler.onFormRemove);
+  //route MessageDlg/ShowMessage through our scalable dialog while a scale is active
+  PromptDialogFunction := @scaledPromptDialogSafe;
+end;
+
+procedure ApplyUITextScale(newPercent: integer);
+var
+  newscale: single;
+  i: integer;
+  f: TCustomForm;
+begin
+  newscale := newPercent / 100;
+  if newscale < 1.0 then newscale := 1.0;
+  if newscale > 4.0 then newscale := 4.0;
+  if newscale = uitextscale then exit;
+
+  // Make sure the hooks exist even if we started at 100% (so future forms scale too).
+  if uiscaler = nil then
+    InitUITextScale;
+
+  // Rescale every form we have already scaled, from the current scale to the new one.
+  for i := 0 to uiscaler.scaledForms.Count - 1 do
+    scaleFormBetween(TCustomForm(uiscaler.scaledForms[i]), uitextscale, newscale);
+
+  uitextscale := newscale;
+
+  // Re-measure menus: menu item boxes are sized at handle creation via WM_MEASUREITEM (which reads
+  // uitextscale); the owner-draw already reads it live, but the box sizes need a handle rebuild.
+  for i := 0 to uiscaler.scaledForms.Count - 1 do
+  begin
+    f := TCustomForm(uiscaler.scaledForms[i]);
+    if (f <> nil) and (f.Menu <> nil) then
+      try f.Menu.Items.RecreateHandle; except end;
+  end;
+end;
+
+end.

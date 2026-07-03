@@ -1103,6 +1103,9 @@ begin
           if reg.ValueExists('Override Default Font') then
             cbOverrideDefaultFont.Checked:=reg.readbool('Override Default Font');
 
+          if reg.ValueExists('UI Text Scale') then
+            seUITextScale.Value:=reg.ReadInteger('UI Text Scale');
+
           {$ifdef windows}
           {$ifdef privatebuild}
           if reg.ValueExists('DoNotOpenProcessHandles') then
